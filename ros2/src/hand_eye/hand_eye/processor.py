@@ -60,7 +60,7 @@ class HandEyeProcessor ():
         self.state_pub = node.create_publisher(std_msgs.String, "/hand_eye/state", 10)
         self.state_pub_timer = node.create_timer(0.1, self._on_state_pub)
         
-    
+        
     def _on_state_pub(self) -> None:
         msg = std_msgs.String()
         msg.data = json.dumps(self.state_.dict())
@@ -98,7 +98,8 @@ class HandEyeProcessor ():
 
         representative_poses, representative_frames  = sharp_poses[representative_frames_idxs], sharp_frames[representative_frames_idxs]
         
-        chessboard_pts = camera_utils.get_chessboard_pts((9, 6))
+        # IMPORTANT: The chessboard square size is 33mm, the unit measure is meters
+        chessboard_pts = camera_utils.get_chessboard_pts((9, 6), square_size=0.033)
 
         R_gripper2base_r = []
         t_gripper2base_r = []

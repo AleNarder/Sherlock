@@ -1,5 +1,6 @@
 from hand_eye.processor import HandEyeProcessor
 from hand_eye.recorder import HandEyeRecorder
+from hand_eye.tf_publisher import HandEyeTFPublisher
 import rclpy
 import logging
 from rclpy.node import Node
@@ -24,6 +25,7 @@ def main ():
     
     HandEyeProcessor(node, mc)
     HandEyeRecorder(node, mc)
+    HandEyeTFPublisher(node, mc)
     
     rclpy.spin(node)
     rclpy.shutdown()
