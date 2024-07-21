@@ -1,0 +1,28 @@
+version: '3'
+
+includes:
+  ros2: 
+    taskfile: ./ros2/Taskfile.yml
+    dir: ./ros2
+
+  bags:
+    taskfile: ./bags/Taskfile.yml
+    dir: ./bags
+
+tasks:
+
+  default:
+    - task: install
+    - task: build
+
+  install:
+    - git submodule update --init --recursive
+    - task: ros2:install
+    - task: bags:install
+
+  build:
+    - task: ros2:build
+
+  clean:
+    - task: ros2:clean
+    - task: bags:clean

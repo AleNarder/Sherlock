@@ -1,0 +1,6 @@
+int16 id
+string name
+float64[] tcp
+---
+bool success
+string message

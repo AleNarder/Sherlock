@@ -1,0 +1,5 @@
+build
+install
+log
+.ipynb_checkpoints
+__pycache__

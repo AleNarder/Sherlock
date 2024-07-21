@@ -1,0 +1,15 @@
+version: '3'
+
+tasks:
+
+  install:
+    - sudo apt update && rosdep update
+    - rosdep install --from-paths src --ignore-src -r -y
+    - pip3 install -r requirements.txt
+  
+  build:
+    - colcon build
+  
+  clean:
+    - rm -rf build log install
+

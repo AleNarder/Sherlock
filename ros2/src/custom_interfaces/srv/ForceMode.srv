@@ -1,0 +1,9 @@
+bool enabled
+float64[] task_frame
+uint8[] selection_vector
+float64[] force
+uint8 type
+float64[] limits
+---
+bool response
+string message

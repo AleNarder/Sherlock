@@ -1,0 +1,12 @@
+version: 3
+
+tasks:
+  install:
+    cmds:
+      - sudo apt-get install ros-$ROS_DISTRO-rosbag2
+      - wget https://mega.nz/file/21khXS7Z#kbJ5PC9WZbrnGl5LT07-MrnbultW8dxH3OG8uv6T73Y
+      - unzip bags.zip
+
+  clean:
+    cmds:
+      - rm -rf build install log

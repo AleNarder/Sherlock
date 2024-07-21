@@ -1,0 +1,10 @@
+uint8 JOINT=0
+uint8 CARTESIAN=1
+
+bool active
+uint8 type
+uint16 rate # in Hz
+uint64 duration # in seconds
+---
+bool success
+string message

@@ -1,0 +1,5 @@
+float64 mass
+float64[] center_of_mass
+---
+bool success
+string message

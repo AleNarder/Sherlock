@@ -1,0 +1,68 @@
+services:
+  calibration_dev:
+    image: calibration-dev:latest
+    build: 
+      dockerfile: Dockerfile
+      context: .
+      target: dev
+    command: /bin/sh -c "while sleep 1000; do :; done"
+    # runtime: nvidia
+    profiles:
+        - dev
+    privileged: true
+    environment:
+      # This instructs X clients – your graphical programs – 
+      # which X server to connect to. Set DISPLAY in the container to the value of $DISPLAY on your host.
+      - DISPLAY=${DISPLAY}
+    ports:
+      - 8088:8088
+      - 9090:9090
+      - 5173:5173
+    volumes:
+      # Mounts the project folder to '/workspace'. The target path inside the container
+      # should match what your application expects. In this case, the compose file is
+      # in a sub-folder, so you will mount '..'. You would then reference this path as the
+      # 'workspaceFolder' in '.devcontainer/devcontainer.json' so VS Code starts here.
+      - .:/workspace:cached
+      # Share the host X-server with the container 
+      - /tmp/.X11-unix:/tmp/.X11-unix
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  calibration:
+    image: calibration:latest
+    build: 
+      dockerfile: Dockerfile
+      context: .
+      target: prod
+    profiles:
+       - prod 
+    privileged: true
+    ports:
+      - 8088:8088
+
+  mongodb:
+    image: mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+
+  minio:
+    image: minio/minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio:/data
+    environment:
+      MINIO_ROOT_USER: username
+      MINIO_ROOT_PASSWORD: password
+    command: server --console-address ":9001" /data
+
+volumes:
+    minio:

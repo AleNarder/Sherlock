@@ -1,0 +1,10 @@
+uint8 MANUAL=0
+uint8 AUTO=1
+uint8 ERROR=2
+
+# Service definition
+
+int8 state  # Using int32 for the enum
+---
+bool response
+string message

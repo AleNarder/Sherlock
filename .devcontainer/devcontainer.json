@@ -1,0 +1,30 @@
+{
+    "name": "calibration",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "calibration_dev",
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+    },
+    "workspaceFolder": "/calibration",
+    "mounts": [
+        "source=${localWorkspaceFolder},target=/calibration,type=bind",
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.bash_history,target=/home/vscode/.bash_history,type=bind"
+    ],
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "github.copilot",
+                "ms-python.python",
+                "ms-vscode.cmake-tools",
+                "esbenp.prettier-vscode",
+                "dbaeumer.vscode-eslint",
+                "eamodio.gitlens",
+                "mhutchie.git-graph",
+                "ms-vscode.cpptools-extension-pack",
+                "ms-azuretools.vscode-docker",
+                "Gruntfuggly.todo-tree",
+                "smilerobotics.urdf"
+            ]
+        }
+    }
+}

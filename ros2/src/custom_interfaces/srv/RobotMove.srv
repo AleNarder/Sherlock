@@ -1,0 +1,14 @@
+uint8 JOINT=0
+uint8 CARTESIAN=1
+
+float64[] joint_positions
+float64[] cartesian_positions
+int8[] configuration
+uint8 type
+float64 speed_percent
+bool linear_motion
+bool relative
+int8 rounding #percentage of the bending radius to be used for rounding the corners of the path
+---
+bool response
+string message
