@@ -17,9 +17,10 @@ def find_chessboard_corners ( img: cv2_t.MatLike, pattern_size=(9, 6)):
         return False, None
 
 
-def get_chessboard_pts ( pattern_size=(9, 6), square_size=1.0) -> list[np.array]:
-    objp = np.zeros((9*6,3), np.float32)
-    objp[:,:2] = np.mgrid[0:9,0:6].T.reshape(-1,2)
+def get_chessboard_pts (pattern_size=(9, 6), square_size=1.0) -> list[np.array]:
+    rows, cols = pattern_size
+    objp = np.zeros((rows*cols,3), np.float32)
+    objp[:,:2] = np.mgrid[0:rows,0:cols].T.reshape(-1,2) * square_size
     return objp
 
 
@@ -37,7 +38,6 @@ def compute_intrinsic ( imgs: list[cv2_t.MatLike], pattern_size, img_size, squar
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, flags, None)
     return mtx, dist, rvecs, tvecs, objpoints, imgpoints
 
-
 def compute_reprojection_error (objpoints, imgpoints, rvecs, tvecs, mtx, dist):
     errors     = []    
     for i in range(len(objpoints)):
@@ -46,9 +46,6 @@ def compute_reprojection_error (objpoints, imgpoints, rvecs, tvecs, mtx, dist):
         errors.append(error)
 
     return np.sum(errors)/len(objpoints), errors
-
-
-
 
 def get_sharp_frames ( frames: list[cv2_t.MatLike], threshold = 150) -> list[int]:
     print(f"Selecting sharp frames out of {len(frames)} frames")
@@ -63,7 +60,6 @@ def get_sharp_frames ( frames: list[cv2_t.MatLike], threshold = 150) -> list[int
     print(f"Found {len(sharp_frames_idxs)} sharp frames" + f" out of {len(frames)}" + f" with threshold {threshold}")
 
     return sharp_frames_idxs
-
 
 def get_n_representative_frames ( frames: list[cv2_t.MatLike], num_frames = 75) -> list[int]:
     print(f"Selecting {num_frames} representative frames out of {len(frames)} frames")
