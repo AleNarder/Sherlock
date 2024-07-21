@@ -19,8 +19,16 @@ def generate_launch_description():
         name='camera_intrinsic_node',
         output='both'
     ) 
+    
+    hand_eye = Node(
+        package='hand_eye',
+        executable='hand_eye_node',
+        name='hand_eye_node',
+        output='both'
+    )
 
     return LaunchDescription([
         ros_bridge,
         camera_intrinsic,
+        hand_eye
     ])
