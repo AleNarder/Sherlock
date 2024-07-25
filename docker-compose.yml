@@ -46,12 +46,6 @@ services:
     ports:
       - 8088:8088
 
-  mongodb:
-    image: mongo
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-
   minio:
     image: minio/minio
     ports:
