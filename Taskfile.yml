@@ -9,6 +9,10 @@ includes:
     taskfile: ./bags/Taskfile.yml
     dir: ./bags
 
+  notebooks:
+    taskfile: ./notebooks/Taskfile.yml
+    dir: ./notebooks
+
 tasks:
 
   default:
@@ -18,11 +22,10 @@ tasks:
   install:
     - git submodule update --init --recursive
     - task: ros2:install
-    - task: bags:install
+    - task: notebooks:install
 
   build:
     - task: ros2:build
 
   clean:
     - task: ros2:clean
-    - task: bags:clean
