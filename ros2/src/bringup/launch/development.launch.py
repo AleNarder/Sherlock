@@ -13,10 +13,10 @@ def generate_launch_description():
             get_package_share_directory('rosbridge_server'), 'launch'), '/rosbridge_websocket_launch.xml']),
     )
 
-    camera_intrinsic = Node(
-        package='camera_intrinsic',
-        executable='camera_intrinsic_node',
-        name='camera_intrinsic_node',
+    intrinsics = Node(
+        package='intrinsics',
+        executable='intrinsics_node',
+        name='intrinsics_node',
         output='both'
     ) 
     
@@ -26,9 +26,17 @@ def generate_launch_description():
         name='hand_eye_node',
         output='both'
     )
+    
+    scanner = Node(
+        package='scanner',
+        executable='scanner_node',
+        name='scanner_node',
+        output='both'
+    )
 
     return LaunchDescription([
         ros_bridge,
-        camera_intrinsic,
+        intrinsics,
+        # scanner,
         hand_eye
     ])
