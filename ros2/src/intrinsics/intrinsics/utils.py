@@ -3,9 +3,25 @@ import cv2
 import cv2.typing as cv2_t
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
+from typing import TypedDict
 
-def euclidean_distance (x, y):
-    return np.linalg.norm(x - y)
+class IntrinsicsDict(TypedDict):
+    mtx: np.ndarray
+    dist: np.ndarray
+
+def is_sharp ( frame: cv2_t.MatLike, threshold = 150) -> bool:
+    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    sharpness = cv2.Laplacian(gray_frame, cv2.CV_64F).var()
+    return sharpness > threshold
+
+def undistort_image (img: cv2_t.MatLike, mtx, dist):
+    h,  w = img.shape[:2]
+    newcameramtx, roi = cv2.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
+    dst = cv2.undistort(img, mtx, dist, None, newcameramtx)
+    x, y, w, h = roi
+    dst = dst[y:y+h, x:x+w]
+    return dst
+
 
 def find_chessboard_corners ( img: cv2_t.MatLike, pattern_size=(9, 6)):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -24,7 +40,7 @@ def get_chessboard_pts (pattern_size=(9, 6), square_size=1.0) -> list[np.array]:
     return objp
 
 
-def compute_intrinsic ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0, flags = None):    
+def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0, flags = None):    
     objpoints = []
     imgpoints = []  
 
@@ -38,6 +54,7 @@ def compute_intrinsic ( imgs: list[cv2_t.MatLike], pattern_size, img_size, squar
     ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, flags, None)
     return mtx, dist, rvecs, tvecs, objpoints, imgpoints
 
+
 def compute_reprojection_error (objpoints, imgpoints, rvecs, tvecs, mtx, dist):
     errors     = []    
     for i in range(len(objpoints)):
@@ -47,19 +64,6 @@ def compute_reprojection_error (objpoints, imgpoints, rvecs, tvecs, mtx, dist):
 
     return np.sum(errors)/len(objpoints), errors
 
-def get_sharp_frames ( frames: list[cv2_t.MatLike], threshold = 150) -> list[int]:
-    print(f"Selecting sharp frames out of {len(frames)} frames")
-    gray_frames = [cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) for frame in frames]
-    sharp_frames_idxs = []
-    
-    for i in range(1, len(gray_frames)):
-        sharpness = cv2.Laplacian(gray_frames[i], cv2.CV_64F).var()
-        if sharpness > threshold:
-            sharp_frames_idxs.append(i)
-    
-    print(f"Found {len(sharp_frames_idxs)} sharp frames" + f" out of {len(frames)}" + f" with threshold {threshold}")
-
-    return sharp_frames_idxs
 
 def get_n_representative_frames ( frames: list[cv2_t.MatLike], num_frames = 75) -> list[int]:
     print(f"Selecting {num_frames} representative frames out of {len(frames)} frames")
@@ -83,6 +87,9 @@ def get_n_representative_frames ( frames: list[cv2_t.MatLike], num_frames = 75) 
         # Perform kmeans clustering on pca reduced frames to obtain representative frames
         kmeans = KMeans(n_clusters=num_frames, random_state=0, n_init="auto").fit(pca_reduced_frames)
         representative_frames_idxs = []
+        
+        def euclidean_distance (x, y):
+            return np.linalg.norm(x - y)
 
         for cluster_idx, cluster_center in enumerate(kmeans.cluster_centers_):
 

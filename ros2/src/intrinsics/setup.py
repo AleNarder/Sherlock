@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = 'camera_intrinsic'
+package_name = 'intrinsics'
 
 setup(
     name=package_name,
@@ -13,14 +13,14 @@ setup(
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='vscode',
+    maintainer='alessio',
     maintainer_email='alessio.narder@kaigos.io',
     description='TODO: Package description',
     license='TODO: License declaration',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'camera_intrinsic_node = camera_intrinsic.node:main',
+            'intrinsics_node = intrinsics.node:main',
         ],
     },
 )
