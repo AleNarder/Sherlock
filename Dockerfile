@@ -1,7 +1,5 @@
 FROM osrf/ros:humble-desktop-full-jammy as base
 
-RUN apt-get update && apt-get install -y python3-pip
-
 # Add vscode user with same UID and GID as your host system
 # (copied from https://code.visualstudio.com/remote/advancedcontainers/add-nonroot-user#_creating-a-nonroot-user)
 ARG USERNAME=vscode
@@ -56,24 +54,21 @@ RUN sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d
 #################################
 FROM base as dev
 
-ENV BAGS_URL=${CALIBRATION_BAGS_URL}
-
-# Install gazebo
-RUN sudo apt-get update && sudo apt-get install -y lsb-release wget gnupg curl
-RUN sudo wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null \
-    && sudo apt-get update \
-    && sudo apt-get install -y \gz-harmonic 
-
-# Install Node.js
-RUN sudo curl -fsSL https://deb.nodesource.com/setup_22.x -o nodesource_setup.sh   
-RUN sudo -E bash nodesource_setup.sh && sudo apt-get install -y nodejs
-
 # Update PATH
 RUN echo "source /calibration/ros2/install/setup.bash" >> ~/.bashrc
 
+# # Install Node.js
+# RUN sudo curl -fsSL https://deb.nodesource.com/setup_22.x -o nodesource_setup.sh   
+# RUN sudo -E bash nodesource_setup.sh && sudo apt-get install -y nodejs
+
 # Install git-lfs
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && sudo apt-get install git-lfs
+
+# Debian has changed the default User Scheme, so python packages will be
+# installed in ~/.local/bin, which is not in the PATH by default.
+# @see https://packaging.python.org/en/latest/guides/installing-using-linux-tools/#debian-ubuntu
+RUN sudo apt update && sudo apt install -y python3-pip
+RUN echo "export PATH=$PATH:~/.local/bin" >> ~/.bashrc
 
 #################################
 # PRODUCTION TARGET
