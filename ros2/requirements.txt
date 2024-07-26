@@ -5,3 +5,4 @@ minio == 7.2.7
 scikit-learn == 1.5.1
 scikit-learn-intelex == 2024.5.0
 transforms3d == 0.4.2
+python-statemachine == 2.3.4
