@@ -16,7 +16,7 @@ services:
       - DISPLAY=${DISPLAY}
     ports:
       - 8088:8088
-      - 9090:9090
+      # - 9090:9090
       - 5173:5173
     volumes:
       # Mounts the project folder to '/workspace'. The target path inside the container
@@ -48,9 +48,6 @@ services:
 
   minio:
     image: minio/minio
-    ports:
-      - "9000:9000"
-      - "9001:9001"
     volumes:
       - minio:/data
     environment:
