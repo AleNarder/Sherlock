@@ -5,6 +5,7 @@ import transforms3d
 import json
 import os
 
+from realsense2_camera_msgs.msg import Extrinsics
 from intrinsics.utils import is_sharp
 from hand_eye.utils import compute_hand_eye
 from statemachine import StateMachine, State
@@ -33,13 +34,14 @@ class HandEyeNode (StateMachine, Node):
     stop_recording  = RECORDING.to(PROCESSING)
     processing_done = PROCESSING.to(INITIALIZED)
     
-    def __init__ (self, frame_id, bag_mode = True):        
+    def __init__ (self, base_frame_id, hand_frame_id, eye_frame_id):        
         StateMachine.__init__(self)
         Node.__init__(self, 'hand_eye_node')
 
         # Variables
-        self.frame_id_ = frame_id
-        self.bag_mode_ = bag_mode
+        self.hand_frame_id_ = hand_frame_id
+        self.base_frame_id  = base_frame_id
+        self.eye_frame_id   = eye_frame_id
         self.frames = []
         self.poses  = []
         self.intrinsics = { "mtx": None, "dist": None }
@@ -55,30 +57,31 @@ class HandEyeNode (StateMachine, Node):
         
         # Publishers
         self.state_pub_ = self.create_publisher(String, "/hand_eye/state", 10)
+        self.ext_pub_   = self.create_publisher(Extrinsics, "/hand_eye/extrinsics", 10)
         self.create_timer(0.1, self._publish)
     
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
         self.br = TransformBroadcaster(self)
 
-    
     def on_initialize (self):
         self.get_logger().info("initialized!")
         self.frames = []
         self.poses  = []
+        if os.path.exists(os.path.join("/", "calibration", "data", "hand_eye", "h.npy")):
+            self.hand_eye_h = np.load(os.path.join("/", "calibration", "data", "hand_eye", "h.npy"))
+            self.get_logger().info("hand eye tf loaded!")
         
     def after_initialize(self):
-        if not self.bag_mode_:
-            self.timer = self.create_timer(1 / 30, self._broadcast_tf)
-        else:
-            self.create_subscription(TFMessage, "/tf", self._on_bag_tf, 10)
-            
+        self.create_subscription(TFMessage, "/tf", self._on_bag_tf, 10)
             
     def intrinsics_are_loaded(self):
         if self.intrinsics["mtx"] is None or self.intrinsics["dist"] is None:
             return False
-        print("INTRINSICS ARE LOADED!!", str(self.intrinsics))
-        return True
+        else:
+            self.get_logger().info("camera intrinsics are loaded!")
+            return True
+    
     
     def after_stop_recording(self):
         self.get_logger().info("stop recording...")
@@ -108,16 +111,16 @@ class HandEyeNode (StateMachine, Node):
         
         return response
 
-
     def _on_image_cb(self, msg: Image):
         if self.current_state == self.RECORDING:
             cv_frame  = bridge.imgmsg_to_cv2(msg, desired_encoding='passthrough')
             if (is_sharp(cv_frame)): 
                 timestap = msg.header.stamp
                 pose = self.get_homogeneous_matrix(timestap)
-                
+      
+                self.frames.append(cv_frame)          
                 self.poses.append(pose)
-                self.frames.append(cv_frame)
+      
 
     def _on_bag_tf (self, msg: TFMessage):
         stamp = msg.transforms[0].header.stamp
@@ -136,10 +139,16 @@ class HandEyeNode (StateMachine, Node):
         data = str(self.current_state)
         msg.data = json.dumps(data)
         self.state_pub_.publish(msg)
+        
+        if self.hand_eye_h is not None:
+            msg = Extrinsics()
+            msg.rotation = self.hand_eye_h[:3, :3].flatten().tolist()
+            msg.translation = self.hand_eye_h[:3, 3].flatten().tolist()
+            self.ext_pub_.publish(msg)
 
-    def get_homogeneous_matrix(self, stamp, base_frame = "ur10e_base_link", gripper_frame = "link6_1"):
+    def get_homogeneous_matrix(self, stamp):
         try:
-            trans = self.tf_buffer.lookup_transform(base_frame, gripper_frame, stamp)
+            trans = self.tf_buffer.lookup_transform(self.base_frame_id, self.hand_frame_id_, stamp)
             translation = [
                 trans.transform.translation.x,
                 trans.transform.translation.y,
@@ -158,7 +167,7 @@ class HandEyeNode (StateMachine, Node):
             self.get_logger().error(f"Transform lookup failed: {e}")
             return None  
         
-    def _get_tf (self, timestamp = None):    
+    def _get_tf (self, timestamp):    
         
         t = TransformStamped()
         
@@ -166,9 +175,9 @@ class HandEyeNode (StateMachine, Node):
         translation = self.hand_eye_h[:3, 3].reshape(3)
         
         # Set the time and frame IDs
-        t.header.stamp = timestamp or self.get_clock().now().to_msg()
-        t.header.frame_id = self.frame_id_
-        t.child_frame_id = 'depth_camera'
+        t.header.stamp = timestamp
+        t.header.frame_id = self.hand_frame_id_
+        t.child_frame_id  = self.eye_frame_id
 
         # Set the translation (example values)
         t.transform.translation.x = translation[0]
@@ -183,30 +192,41 @@ class HandEyeNode (StateMachine, Node):
         return t
     
     def _broadcast_tf(self, timestamp = None):
-        if self.hand_eye_h is not None:
+        if self.hand_eye_h is not None and self.current_state != self.RECORDING:
             tf = self._get_tf(timestamp)
             # Broadcast the transform
             self.br.sendTransform(tf)
     
     def _on_save (self):
         np.save(os.path.join("/", "calibration", "data", "hand_eye", "h.npy"), self.hand_eye_h)
+        np.save(os.path.join("/", "calibration", "data", "hand_eye", "poses.npy"), self.poses)
+        np.save(os.path.join("/", "calibration", "data", "hand_eye", "frames.npy"), self.frames)
         
     def _process(self):
         self.get_logger().info("processing...")
+        
         r, t = compute_hand_eye(
             self.frames,
             self.poses,
             self.intrinsics
         )
-        self.hand_eye_h = np.eye(4)
-        self.hand_eye_h[:3, :3] = r
-        self.hand_eye_h[:3, 3]  = t.reshape(3)
+        
+        # !IMPORTANT: The hand-eye calibration is computed in the camera frame
+        #             but we need to express it in the robot base frame
+        
+        h = np.eye(4)
+        h[:3, :3] = r
+        h[:3, 3]  = t.reshape(3)
         
         self.processing_done()
         
 def main ():
     rclpy.init()
-    node = HandEyeNode("link6_1")
+    node = HandEyeNode(
+        base_frame_id = "ur10e_base_link",
+        hand_frame_id = "link6_1",
+        eye_frame_id  = "depth_camera"
+    )
     rclpy.spin(node)
     rclpy.shutdown()
 
