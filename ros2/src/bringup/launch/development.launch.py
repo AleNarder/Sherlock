@@ -34,9 +34,10 @@ def generate_launch_description():
         output='both'
     )
 
+
     return LaunchDescription([
         ros_bridge,
         intrinsics,
-        # scanner,
+        scanner,
         hand_eye
     ])
