@@ -1,1 +1,2 @@
 jupyter == 1.0.0
+matplotllib == 3.5.1
