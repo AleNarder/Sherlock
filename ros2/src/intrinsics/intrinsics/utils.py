@@ -9,7 +9,7 @@ class IntrinsicsDict(TypedDict):
     mtx: np.ndarray
     dist: np.ndarray
 
-def is_sharp ( frame: cv2_t.MatLike, threshold = 150) -> bool:
+def is_sharp ( frame: cv2_t.MatLike, threshold = 300) -> bool:
     gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     sharpness = cv2.Laplacian(gray_frame, cv2.CV_64F).var()
     return sharpness > threshold

@@ -17,12 +17,10 @@ bridge = CvBridge()
 
 class IntrinsicsNode(StateMachine, Node):
    
-    UNITIALIZED = State(name="UNITIALIZED", initial = True)
-    INITIALIZED = State(name="INITIALIZED") 
+    INITIALIZED = State(name="INITIALIZED", initial = True) 
     RECORDING   = State(name="RECORDING")
     PROCESSING  = State(name="PROCESSING")
-    
-    initialized     = UNITIALIZED.to(INITIALIZED, cond = "intrinsics_are_loaded") | UNITIALIZED.to(UNITIALIZED)
+
     start_recording = INITIALIZED.to(RECORDING) 
     stop_recording  = RECORDING.to(PROCESSING)
     processing_done = PROCESSING.to(INITIALIZED)
@@ -111,7 +109,6 @@ class IntrinsicsNode(StateMachine, Node):
     def _process(self):
         rep_frames = [self.frames[idx] for idx in get_n_representative_frames(self.frames)]
         mtx, dist ,rvecs, tvecs, objectpoints, imgpoints = compute_intrinsics(rep_frames, (9, 6), (640, 480))
-        mean_error, errors = compute_reprojection_error(objectpoints, imgpoints, rvecs, tvecs,  mtx, dist)
         
         self.intrinsics["mtx"] = mtx
         self.intrinsics["dist"] = dist
@@ -122,6 +119,8 @@ class IntrinsicsNode(StateMachine, Node):
         np.save(os.path.join("/", "calibration", "data", "mtx.npy"), self.intrinsics["mtx"])
         np.save(os.path.join("/", "calibration", "data", "dist.npy"), self.intrinsics["dist"])
         self.get_logger().info("intrinsics saved!")
+        np.save(os.path.join("/", "calibration", "data", "frames.npy"), self.frames)
+        self.get_logger().info("frames saved!")
         
    
 def main ():
