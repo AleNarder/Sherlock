@@ -64,11 +64,7 @@ RUN echo "source /calibration/ros2/install/setup.bash" >> ~/.bashrc
 # Install git-lfs
 RUN curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash && sudo apt-get install git-lfs
 
-# Debian has changed the default User Scheme, so python packages will be
-# installed in ~/.local/bin, which is not in the PATH by default.
-# @see https://packaging.python.org/en/latest/guides/installing-using-linux-tools/#debian-ubuntu
 RUN sudo apt update && sudo apt install -y python3-pip
-RUN echo "export PATH=$PATH:~/.local/bin" >> ~/.bashrc
 
 #################################
 # PRODUCTION TARGET

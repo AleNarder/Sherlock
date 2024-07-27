@@ -5,6 +5,7 @@
     "features": {
         "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
     },
+    "postCreateCommand": "echo 'export PATH=$PATH:~/.local/bin' >> ~/.bashrc",
     "workspaceFolder": "/calibration",
     "mounts": [
         "source=${localWorkspaceFolder},target=/calibration,type=bind",
