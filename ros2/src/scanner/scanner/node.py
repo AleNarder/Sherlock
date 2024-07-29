@@ -37,10 +37,10 @@ class ScannerNode (Node, StateMachine):
         StateMachine.__init__(self)
         Node.__init__(self, 'scanner_node')
 
-        self.create_subscription(String, "/intrinsics/coeffs", self._on_intrinsics_coeffs, 10)
-        self.create_subscription(Image, "/camera/color/image_raw", self._on_color_image, 10)
-        self.create_subscription(Image, "/camera/depth/image_rect_raw", self._on_depth_image, 10)
-        self.create_subscription(CameraInfo, '/camera/depth/camera_info', self._on_depth_info, 10)
+        self.create_subscription(String,     "/intrinsics/coeffs", self._on_intrinsics_coeffs, 10)
+        self.create_subscription(Image,      "/camera/color/image_raw", self._on_color_image, 10)
+        self.create_subscription(Image,      "/camera/depth/image_rect_raw", self._on_depth_image, 10)
+        self.create_subscription(CameraInfo, "/camera/depth/camera_info", self._on_depth_info, 10)
         self.create_subscription(Extrinsics, "/camera/extrinsics/depth_to_color", self._on_depth_to_color, 10)
         self.create_subscription(Extrinsics, "/hand_eye/extrinsics", self._on_hand_eye, 10)
 
@@ -149,7 +149,8 @@ class ScannerNode (Node, StateMachine):
                 y = (v - self.cy) * depth / self.fy
                 z = depth
 
-                points.append((x, y, z))
+                # TODO: HANDLE ROTATION (180 AROUND y AXIS)
+                points.append((-x, y, -z))
                 
         return points
     
@@ -162,6 +163,8 @@ class ScannerNode (Node, StateMachine):
         
         msg = self.curr_depth_msg
         points = self.generate_points(msg)
+        
+        self.get_logger().info(f"Min value: {np.min(points)}, Max value: {np.max(points)}, Mean value: {np.mean(points)}")
         
         pc2_msg = PointCloud2()
         pc2_msg.header.stamp = msg.header.stamp
