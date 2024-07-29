@@ -9,18 +9,7 @@ def homogenous_matrix_from_rt (r: np.array, t: np.array):
     h[:3, 3] = t.reshape(3)
     return h
 
-def from_camera_frame_to_ros_frame(h: np.array):
-    R = [
-        [0,  0, 1, 0],
-        [-1, 0, 0, 0],
-        [0, -1, 0, 0],
-        [0,  0, 0, 1]
-    ]
-    
-    h_ros = R @ h @ np.linalg.inv(R)
-    return h_ros
-
-def compute_hand_eye( frames: list[cv2_t.MatLike], poses: list[np.array], cam_data: IntrinsicsDict, to_ros2_frame: bool = True):
+def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_data: IntrinsicsDict):
         chessboard_pts = get_chessboard_pts((9, 6), square_size=0.033)
         
         frames = np.array(frames)
@@ -45,9 +34,6 @@ def compute_hand_eye( frames: list[cv2_t.MatLike], poses: list[np.array], cam_da
                     
                     rot, _ = cv2.Rodrigues(rvec)
                     h = homogenous_matrix_from_rt(rot, tvec)
-                    if to_ros2_frame:
-                        # IMPORTANT: the retrived pose is in the camera frame but the hand pose pose is in ros2 frame
-                        h = from_camera_frame_to_ros_frame(h)
                     
                     rot  = h[:3, :3]
                     tvec = h[:3, 3].reshape(3, 1)
