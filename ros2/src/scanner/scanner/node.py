@@ -148,9 +148,7 @@ class ScannerNode (Node, StateMachine):
                 x = (u - self.cx) * depth / self.fx
                 y = (v - self.cy) * depth / self.fy
                 z = depth
-
-                # TODO: HANDLE ROTATION (180 AROUND y AXIS)
-                points.append((-x, y, -z))
+                points.append((x, y, z))
                 
         return points
     
