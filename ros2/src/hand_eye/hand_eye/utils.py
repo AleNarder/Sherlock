@@ -50,4 +50,17 @@ def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_dat
             method = cv2.CALIB_HAND_EYE_TSAI
         )
         
+        
+        # --- START PATCH ---
+        # The gripper frame of the tested robot is rotated 180 degrees around the z-axis 
+        # (which is the y axis in the camera frame). Remove this rotation if the gripper frame is not rotated
+        Ry = np.array([
+            [-1,  0,  0],
+            [ 0,  1,  0],
+            [ 0,  0, -1]
+        ])
+        R_cam2gripper = Ry @ R_cam2gripper
+        # --- END PATCH ---
+        
+        
         return R_cam2gripper, t_cam2gripper
