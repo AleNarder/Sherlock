@@ -215,9 +215,9 @@ class HandEyeNode (StateMachine, Node):
         #             but we need to express it in the robot base frame
         
         h = np.eye(4)
-        h[:3, :3] = r
+        h[:3, :3] = r 
         h[:3, 3]  = t.reshape(3)
-        
+        self.hand_eye_h = h
         self.processing_done()
         
 def main ():
