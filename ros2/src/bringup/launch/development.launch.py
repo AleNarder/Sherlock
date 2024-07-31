@@ -5,6 +5,7 @@ from launch import LaunchDescription
 from ament_index_python.packages import get_package_share_directory
 # frontend for xml type launch file!
 from launch.launch_description_sources import FrontendLaunchDescriptionSource
+import math
 
 def generate_launch_description():
 
@@ -34,9 +35,16 @@ def generate_launch_description():
         output='both'
     )
 
+    tcp_tf_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        arguments=['0', '0', '0', '0', '0', f"{math.pi / 2}", 'link6_1', 'tcp'],
+    )
+    
 
     return LaunchDescription([
         ros_bridge,
+        tcp_tf_node,
         intrinsics,
         scanner,
         hand_eye
