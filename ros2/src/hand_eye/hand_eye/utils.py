@@ -10,7 +10,7 @@ def homogenous_matrix_from_rt (r: np.array, t: np.array):
     return h
 
 def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_data: IntrinsicsDict):
-        chessboard_pts = get_chessboard_pts((9, 6), square_size=0.033)
+        chessboard_pts = get_chessboard_pts((9, 6), square_size=0.023)
         
         frames = np.array(frames)
         poses = np.array(poses)
@@ -21,7 +21,7 @@ def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_dat
         t_target2cam_r   = [] 
 
         # Only process sufficiently different frames to reduce computation time and avoid overfitting
-        representative_frames_idxs = get_n_representative_frames(frames, num_frames=60)
+        representative_frames_idxs = get_n_representative_frames(frames, num_frames=75)
         representative_frames, representative_poses  = frames[representative_frames_idxs], poses[representative_frames_idxs]
         
         for frame, pose in zip(representative_frames, representative_poses):
@@ -33,15 +33,11 @@ def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_dat
                     t_gripper2base_r.append(pose[:3, 3].reshape((3, 1)))
                     
                     rot, _ = cv2.Rodrigues(rvec)
-                    h = homogenous_matrix_from_rt(rot, tvec)
-                    
-                    rot  = h[:3, :3]
-                    tvec = h[:3, 3].reshape(3, 1)
                     
                     R_target2cam_r.append(rot)
                     t_target2cam_r.append(tvec)
 
-
+                    
         R_cam2gripper, t_cam2gripper = cv2.calibrateHandEye(
             R_gripper2base_r, 
             t_gripper2base_r, 
@@ -51,16 +47,4 @@ def compute_hand_eye(frames: list[cv2_t.MatLike], poses: list[np.array], cam_dat
         )
         
         
-        # --- START PATCH ---
-        # The gripper frame of the tested robot is rotated 180 degrees around the z-axis 
-        # (which is the y axis in the camera frame). Remove this rotation if the gripper frame is not rotated
-        Ry = np.array([
-            [-1,  0,  0],
-            [ 0,  1,  0],
-            [ 0,  0, -1]
-        ])
-        R_cam2gripper = Ry @ R_cam2gripper
-        # --- END PATCH ---
-        
-        
-        return R_cam2gripper, t_cam2gripper
+        return R_cam2gripper, t_cam2gripper, R_target2cam_r, t_target2cam_r
