@@ -18,27 +18,31 @@ def generate_launch_description():
         package='intrinsics',
         executable='intrinsics_node',
         name='intrinsics_node',
-        output='both'
+        output='both',
+    
     ) 
     
     hand_eye = Node(
         package='hand_eye',
         executable='hand_eye_node',
         name='hand_eye_node',
-        output='both'
+        output='both',
+        parameters=[],
     )
     
     scanner = Node(
         package='scanner',
         executable='scanner_node',
         name='scanner_node',
-        output='both'
+        output='both',
+        parameters=[],
     )
 
     tcp_tf_node = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', f"{math.pi / 2}", 'link6_1', 'tcp'],
+        parameters=[],
     )
     
 
