@@ -27,7 +27,6 @@ def find_chessboard_corners ( img: cv2_t.MatLike, pattern_size=(9, 6)):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, corners = cv2.findChessboardCorners(gray, pattern_size, flags=cv2.CALIB_CB_FAST_CHECK)
     if ret:
-        print(f"Found chessboard corners in image")
         return ret, cv2.cornerSubPix(gray,corners, (11,11), (-1,-1), (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
     else:
         return False, None
@@ -40,7 +39,7 @@ def get_chessboard_pts (pattern_size=(9, 6), square_size=1.0) -> list[np.array]:
     return objp
 
 
-def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0, flags = None):    
+def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0):    
     objpoints = []
     imgpoints = []  
 
@@ -51,7 +50,7 @@ def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, squa
             objpoints.append(obj_pts)
             imgpoints.append(img_pts)
     
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, flags, None)
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
     return mtx, dist, rvecs, tvecs, objpoints, imgpoints
 
 
