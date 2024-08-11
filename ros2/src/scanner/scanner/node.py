@@ -1,8 +1,10 @@
 import os
 import json
+import tf2_ros
 import rclpy
 import struct
 import numpy as np
+import transforms3d as t3d
 
 from copy import deepcopy
 from sensor_msgs.msg import Image, PointCloud2, PointField, CameraInfo
@@ -13,6 +15,7 @@ from rclpy.node import Node
 from statemachine import StateMachine, State
 from cv_bridge import CvBridge
 from intrinsics.utils import is_sharp
+from hand_eye.utils import homogenous_from_rt
 
 bridge = CvBridge()
 class ScannerNode (Node, StateMachine):
@@ -34,52 +37,80 @@ class ScannerNode (Node, StateMachine):
     processing_done = PROCESSING.to(FULFILLED)
 
     def __init__ (self):
-        StateMachine.__init__(self)
         Node.__init__(self, 'scanner_node')
+        StateMachine.__init__(self)
 
-        self.create_subscription(String,     "/intrinsics/coeffs", self._on_intrinsics_coeffs, 10)
-        self.create_subscription(Image,      "/camera/color/image_raw", self._on_color_image, 10)
-        self.create_subscription(Image,      "/camera/depth/image_rect_raw", self._on_depth_image, 10)
-        self.create_subscription(CameraInfo, "/camera/depth/camera_info", self._on_depth_info, 10)
-        self.create_subscription(Extrinsics, "/camera/extrinsics/depth_to_color", self._on_depth_to_color, 10)
-        self.create_subscription(Extrinsics, "/hand_eye/extrinsics", self._on_hand_eye, 10)
+        # Subs
+        self.create_subscription(String,     "/intrinsics/coeffs",                self._on_intrinsics_coeffs_cb, 10)
+        self.create_subscription(Image,      "/camera/color/image_raw",           self._on_color_image_cb, 10)
+        self.create_subscription(Image,      "/camera/depth/image_rect_raw",      self._on_depth_image_cb, 10)
+        self.create_subscription(CameraInfo, "/camera/depth/camera_info",         self._on_depth_info_cb, 10)
+        self.create_subscription(Extrinsics, "/camera/extrinsics/depth_to_color", self._on_depth_to_color_cb, 10)
+        self.create_subscription(Extrinsics, "/hand_eye/extrinsics",              self._on_hand_eye_cb, 10)
 
+        # Services
         self.create_service(Trigger, "/scanning/recorder/start_record", self._on_start_record_cb)
         self.create_service(Trigger, "/scanning/recorder/stop_record", self._on_stop_record_cb)
         
-        
+        # Publishers
         self.pc_pub = self.create_publisher(PointCloud2, "/scanning/point_cloud", 10)
         self.create_timer(0.1, self._publish_pc)
         
-        # Variables
+        # TF
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self, spin_thread=True)
+        
+        # Instance variables
         self.color_frames = []
         self.depth_frames = [] 
-        self.curr_depth_msg: None | Image = None
-        self.depth_2_color    = None
-        self.hand_eye_tf      = None
-        self.color_intrinsics = None
         
-        self.fx = None
-        self.fy = None
-        self.cx = None
-        self.cy = None
+        self.curr_depth_msg: None | Image = None
+        self.curr_color_msg: None | Image = None
+        
+        self.depth_2_color_h  = None
+        self.depth_k          = None
+        
+        self.hand_eye_h      = None
+        self.color_k         = None
+        
+            
+    #################################
+    #  PREDICATES
+    #################################
+        
+    def intrinsics_are_loaded(self):
+        return self.color_k is not None
+    
+    def hand_eye_tf_are_loaded(self):
+        return self.hand_eye_h is not None
+    
+    def depth_camera_info_are_loaded(self):
+        return self.depth_k is not None
+        
+    def depth_2_color_is_loaded(self):
+        return self.depth_2_color_h is not None
+    
+    #################################
+    #  STATE MACHINE HOOKS
+    #################################
         
     def before_stop_recording(self):    
         np.save(os.path.join("/", "calibration", "data", "scanner","color_frames.npy"), self.color_frames)
         np.save(os.path.join("/", "calibration", "data", "scanner","depth_frames.npy"), self.depth_frames)
-        np.save(os.path.join("/", "calibration", "data", "scanner","depth_2_color.npy"), self.depth_2_color)
-        
+        np.save(os.path.join("/", "calibration", "data", "scanner","depth_2_color_h.npy"), self.depth_2_color_h)
         
     def after_stop_recording(self):
-        
         self.color_frames   = []
         self.depth_frames   = []
         self.curr_depth_msg = None
-        self.depth_2_color  = None
-        
-    def on_initialized(self):
-        self.get_logger().info("Scanner Node initialized!")
-                
+    
+    def on_enter_state(self, event, state):
+        self.get_logger().info(f"Entering '{state.id}' state from '{event}' event.")
+    
+    #################################
+    #  ROS2 CALLBACKS
+    #################################
+    
     def _on_stop_record_cb(self, request, response):
         self.stop_recording()
         return response
@@ -88,104 +119,172 @@ class ScannerNode (Node, StateMachine):
         self.start_recording()
         return response
     
-    def _on_color_image(self, msg: Image):
+    def _on_color_image_cb(self, msg: Image):
         if self.current_state == self.RECORDING:
             color_frame = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
-            if self.curr_depth_msg is not None:
+            self.curr_color_msg = msg
+            
+            if self.curr_depth_msg is not None and  self.curr_color_msg is not None:
                 depth_frame = bridge.imgmsg_to_cv2(self.curr_depth_msg)
                 self.depth_frames.append(depth_frame)
                 self.color_frames.append(color_frame)
                 
-                
-    def _on_depth_image(self, msg: Image):
+    def _on_depth_image_cb(self, msg: Image):
         if self.current_state == self.RECORDING:
             self.curr_depth_msg = msg
     
-    def _on_depth_to_color(self, msg: Extrinsics):
-        if self.current_state == self.RECORDING and self.depth_2_color is None:
-            self.depth_2_color = msg.rotation, msg.translation
- 
-    def _on_intrinsics_coeffs(self, msg: String):
+    def _on_depth_to_color_cb(self, msg: Extrinsics):
         if self.current_state == self.UNITIALIZED:
-            self.color_intrinsics = json.loads(msg.data)
-            if self.hand_eye_tf_are_loaded() and self.depth_camera_info_are_loaded():
+            self.depth_2_color_h = homogenous_from_rt(np.array(msg.rotation).reshape(3,3), msg.translation)
+            if self.hand_eye_tf_are_loaded() and self.intrinsics_are_loaded() and self.depth_camera_info_are_loaded():
+                self.initialize()
+ 
+    def _on_intrinsics_coeffs_cb(self, msg: String):
+        if self.current_state == self.UNITIALIZED:
+            self.color_k = np.array(json.loads(msg.data)["mtx"]).flatten()
+            if self.hand_eye_tf_are_loaded() and self.depth_camera_info_are_loaded() and self.depth_2_color_is_loaded():
                 self.initialize()
     
-    def _on_hand_eye(self, msg: Extrinsics):
+    def _on_hand_eye_cb(self, msg: Extrinsics):
         if self.current_state == self.UNITIALIZED:
-            self.hand_eye_tf = msg.rotation, msg.translation
-            if self.intrinsics_are_loaded() and self.depth_camera_info_are_loaded():
+            self.hand_eye_h = homogenous_from_rt(np.array(msg.rotation).reshape(3,3), msg.translation)
+            if self.depth_camera_info_are_loaded() and self.intrinsics_are_loaded() and self.depth_2_color_is_loaded():
                 self.initialize()
             
-    def _on_depth_info (self, msg: CameraInfo):
+    def _on_depth_info_cb (self, msg: CameraInfo):
         if self.current_state == self.UNITIALIZED:
-            self.fx = msg.k[0]
-            self.fy = msg.k[4]
-            self.cx = msg.k[2]
-            self.cy = msg.k[5]
-            if self.intrinsics_are_loaded() and self.hand_eye_tf_are_loaded():
+            self.depth_k = np.array(msg.k)
+            if self.intrinsics_are_loaded() and self.hand_eye_tf_are_loaded() and self.depth_2_color_is_loaded():
                 self.initialize()
+
     
-    def intrinsics_are_loaded(self):
-        return self.color_intrinsics is not None
-    
-    def hand_eye_tf_are_loaded(self):
-        return self.hand_eye_tf is not None
-    
-    def depth_camera_info_are_loaded(self):
-        return self.fx is not None and self.fy is not None and self.cx is not None and self.cy is not None
-    
-    def generate_points(self, depth_msg: Image):
+    def generate_points(self, depth_msg: Image, color_msg: Image):
         depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
-        height, width = depth_image.shape
-        points = []
+        color_image = bridge.imgmsg_to_cv2(color_msg, desired_encoding='passthrough')
         
-        for v in range(height):
-            for u in range(width):
-                depth = depth_image[v, u] / 1000.0  # converting depth to meters
-                if depth == 0:
-                    continue
-                x = (u - self.cx) * depth / self.fx
-                y = (v - self.cy) * depth / self.fy
-                z = depth
-                points.append((x, y, z))
-                
+        # Convert depth values from millimeters to meters
+        depth_image = depth_image / 1000.0
+
+        # Create a grid of indices corresponding to pixel coordinates
+        height, width = depth_image.shape
+        u, v = np.meshgrid(np.arange(width), np.arange(height))
+
+        # Calculate x, y, z coordinates
+        cx = self.depth_k[2]
+        cy = self.depth_k[5]
+        fx = self.depth_k[0]
+        fy = self.depth_k[4]
+
+        x = (u - cx) * depth_image / fx
+        y = (v - cy) * depth_image / fy
+        z = depth_image
+        
+        # Combine x, y, z into an (N, 3) array, filtering out points with zero depth
+        valid = z > 0
+        points = np.stack((x[valid], y[valid], z[valid], ), axis=-1)
+        
+        # Transform points from depth camera frame to color camera frame
+        h_inv = np.linalg.inv(self.depth_2_color_h)
+        points = np.matmul(points, h_inv[:3, :3].T) - h_inv[:3, 3]
+        
+        cx_color = self.color_k[2]
+        cy_color = self.color_k[5]
+        fx_color = self.color_k[0]
+        fy_color = self.color_k[4]
+        
+        
+        # Add color information to the points
+        u = np.round((points[:, 0] * fx_color / points[:, 2]) + cx_color).astype(int)
+        v = np.round((points[:, 1] * fy_color / points[:, 2]) + cy_color).astype(int)
+        valid = (u >= 0) & (u < color_image.shape[1]) & (v >= 0) & (v < color_image.shape[0])
+        points = points[valid]
+        rgb = color_image[v[valid], u[valid]]
+
+        np.save(os.path.join("/", "calibration", "data", "scanner","points.npy"), points)
+        np.save(os.path.join("/", "calibration", "data", "scanner","rgb.npy"), rgb)
+        
+        points = np.concatenate((points, rgb), axis=1)
+
         return points
     
     def _publish_pc (self):
         if self.current_state != self.RECORDING:
             return
         
-        if self.curr_depth_msg is None:
+        if self.curr_depth_msg is None or self.curr_color_msg is None:
             return
         
-        msg = self.curr_depth_msg
-        points = self.generate_points(msg)
+        depth_msg = self.curr_depth_msg
+        color_msg = self.curr_color_msg
         
+        ret, tf, h = self._get_transform("ur10e_base_link", "rgb_camera", depth_msg.header.stamp)
+        
+        if not ret:
+            self.get_logger().error("Transform lookup failed!")
+            return
+        else:
+            self.get_logger().info("Transform lookup successful!")
+        
+        points = self.generate_points(depth_msg, color_msg)
         self.get_logger().info(f"Min value: {np.min(points)}, Max value: {np.max(points)}, Mean value: {np.mean(points)}")
-        
         pc2_msg = PointCloud2()
-        pc2_msg.header.stamp = msg.header.stamp
-        pc2_msg.header = msg.header
-        pc2_msg.header.frame_id = "depth_camera"
+        pc2_msg.header.stamp = depth_msg.header.stamp
+        pc2_msg.header = depth_msg.header
+        pc2_msg.header.frame_id = "rgb_camera"
         pc2_msg.height = 1
         pc2_msg.width = len(points)
         pc2_msg.is_dense = False
         pc2_msg.is_bigendian = False
-        pc2_msg.point_step = 12
-        pc2_msg.row_step = pc2_msg.point_step * pc2_msg.width
+        pc2_msg.point_step = 16 # Number of bytes for each point (3*4 for xyz + 4 for rgb)
+        pc2_msg.row_step = pc2_msg.point_step * len(points)
         pc2_msg.fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1),
+            PointField(name='x',   offset=0,  datatype=PointField.FLOAT32, count=1),
+            PointField(name='y',   offset=4,  datatype=PointField.FLOAT32, count=1),
+            PointField(name='z',   offset=8,  datatype=PointField.FLOAT32, count=1),
+            PointField(name='rgb', offset=12, datatype=PointField.UINT32,  count=1),
         ]
 
         buffer = []
         for point in points:
-            buffer.append(struct.pack('fff', *point))
-        
+            # x, y, z are float
+            # rgb is uint32
+            x, y, z, r, g, b = point
+            rgb = struct.unpack('I', struct.pack('BBBB', int(b), int(g), int(r), 0))[0]
+            packed_data = struct.pack('fffI', x, y, z, rgb)
+            buffer.append(packed_data)
+            
         pc2_msg.data = b''.join(buffer)
         self.pc_pub.publish(pc2_msg)
+        
+    def _get_transform(self, target_frame: str, source_frame: str, stamp = None):
+        try:
+            stamp = rclpy.time.Time() if stamp is None else stamp
+            tf = self.tf_buffer.lookup_transform(target_frame, source_frame, stamp)
+
+            translation = [
+                tf.transform.translation.x,
+                tf.transform.translation.y,
+                tf.transform.translation.z
+            ]
+            
+            rotation = [
+                tf.transform.rotation.w,
+                tf.transform.rotation.x,
+                tf.transform.rotation.y,
+                tf.transform.rotation.z
+            ]
+            
+            R = t3d.quaternions.quat2mat(rotation)
+            t = np.array(translation)
+
+            h = homogenous_from_rt(R, t)
+            
+            self.get_logger().info(f"Transform lookup successful!")
+            
+            return True, tf, h
+        except Exception as e:
+            self.get_logger().error(f"Transform lookup failed: {e}")
+            return False, None, None
 
 def main (args=None):
     rclpy.init(args=args)
