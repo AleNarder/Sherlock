@@ -4,9 +4,11 @@ import tf2_ros
 import rclpy
 import struct
 import numpy as np
+import threading
 import transforms3d as t3d
+import open3d as o3d
+import copy
 
-from copy import deepcopy
 from sensor_msgs.msg import Image, PointCloud2, PointField, CameraInfo
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -14,17 +16,18 @@ from realsense2_camera_msgs.msg import Extrinsics
 from rclpy.node import Node
 from statemachine import StateMachine, State
 from cv_bridge import CvBridge
-from intrinsics.utils import is_sharp
 from hand_eye.utils import homogenous_from_rt
+from rclpy.executors import MultiThreadedExecutor
 
 bridge = CvBridge()
+
 class ScannerNode (Node, StateMachine):
 
     UNITIALIZED = State(name="UNITIALIZED", initial = True)
     INITIALIZED = State(name="INITIALIZED")
     RECORDING   = State(name="RECORDING")
     PROCESSING  = State(name="PROCESSING")
-    FULFILLED   = State(name="FULFILLED", final= True)
+    VALIDATED   = State(name="VALIDATED", final= True)
 
     initialize  = UNITIALIZED.to(INITIALIZED, cond = [
         "intrinsics_are_loaded",
@@ -34,7 +37,7 @@ class ScannerNode (Node, StateMachine):
 
     start_recording = INITIALIZED.to(RECORDING)
     stop_recording  = RECORDING.to(PROCESSING)
-    processing_done = PROCESSING.to(FULFILLED)
+    processing_done = PROCESSING.to(VALIDATED)
 
     def __init__ (self):
         Node.__init__(self, 'scanner_node')
@@ -70,8 +73,11 @@ class ScannerNode (Node, StateMachine):
         self.depth_2_color_h  = None
         self.depth_k          = None
         
-        self.hand_eye_h      = None
-        self.color_k         = None
+        self.hand_eye_h       = None
+        self.color_k          = None
+        
+        self.pc_queue         = []
+        self.stitched_pc      = None
         
             
     #################################
@@ -93,24 +99,37 @@ class ScannerNode (Node, StateMachine):
     #################################
     #  STATE MACHINE HOOKS
     #################################
-        
+    
+    def before_start_recording(self):
+        self.color_frames = []
+        self.depth_frames = []
+        self.pc_queue     = []
+        self.stitched_pc  = o3d.geometry.PointCloud()
+
+        # threading.Thread(target=self.consume_pc_queue).start()
+    
     def before_stop_recording(self):    
         np.save(os.path.join("/", "calibration", "data", "scanner","color_frames.npy"), self.color_frames)
         np.save(os.path.join("/", "calibration", "data", "scanner","depth_frames.npy"), self.depth_frames)
         np.save(os.path.join("/", "calibration", "data", "scanner","depth_2_color_h.npy"), self.depth_2_color_h)
-        
+
     def after_stop_recording(self):
         self.color_frames   = []
         self.depth_frames   = []
         self.curr_depth_msg = None
-    
+        threading.Thread(target=self._process_pc_queue).start()
+        
+    def after_processing_done(self):
+        self.get_logger().info(f"Processing done!")
+        o3d.io.write_point_cloud(os.path.join("/", "calibration", "data", "scanner", "stitched_pc.ply"), self.stitched_pc)
+        self.get_logger().info(f"Point cloud saved!")
+            
     def on_enter_state(self, event, state):
         self.get_logger().info(f"Entering '{state.id}' state from '{event}' event.")
     
     #################################
     #  ROS2 CALLBACKS
     #################################
-    
     def _on_stop_record_cb(self, request, response):
         self.stop_recording()
         return response
@@ -156,9 +175,8 @@ class ScannerNode (Node, StateMachine):
             self.depth_k = np.array(msg.k)
             if self.intrinsics_are_loaded() and self.hand_eye_tf_are_loaded() and self.depth_2_color_is_loaded():
                 self.initialize()
-
     
-    def generate_points(self, depth_msg: Image, color_msg: Image):
+    def generate_points(self, depth_msg: Image, color_msg: Image, base2eye_h: np.array):
         depth_image = bridge.imgmsg_to_cv2(depth_msg, desired_encoding='passthrough')
         color_image = bridge.imgmsg_to_cv2(color_msg, desired_encoding='passthrough')
         
@@ -179,9 +197,11 @@ class ScannerNode (Node, StateMachine):
         y = (v - cy) * depth_image / fy
         z = depth_image
         
-        # Combine x, y, z into an (N, 3) array, filtering out points with zero depth
-        valid = z > 0
+        
+        # Combine x, y, z into an (N, 3) array, filtering out points with zero depth, negative depth, or depth greater than 1m
+        valid = (z > 0.1) & (z < 1.0)
         points = np.stack((x[valid], y[valid], z[valid], ), axis=-1)
+        
         
         # Transform points from depth camera frame to color camera frame
         h_inv = np.linalg.inv(self.depth_2_color_h)
@@ -193,19 +213,36 @@ class ScannerNode (Node, StateMachine):
         fy_color = self.color_k[4]
         
         
-        # Add color information to the points
+        # Project points to the color image
         u = np.round((points[:, 0] * fx_color / points[:, 2]) + cx_color).astype(int)
         v = np.round((points[:, 1] * fy_color / points[:, 2]) + cy_color).astype(int)
         valid = (u >= 0) & (u < color_image.shape[1]) & (v >= 0) & (v < color_image.shape[0])
         points = points[valid]
-        rgb = color_image[v[valid], u[valid]]
 
-        np.save(os.path.join("/", "calibration", "data", "scanner","points.npy"), points)
-        np.save(os.path.join("/", "calibration", "data", "scanner","rgb.npy"), rgb)
+        # Transform points from color camera frame to base frame
+        points = np.matmul(points, base2eye_h[:3, :3].T) + base2eye_h[:3, 3]
+        
+        # Add color information to the points
+        rgb = color_image[v[valid], u[valid]]
         
         points = np.concatenate((points, rgb), axis=1)
 
         return points
+    
+    
+    def _process_pc_queue (self):
+        for points in self.pc_queue:
+            pc = o3d.geometry.PointCloud()
+            # Only consider points within a certain range
+            valid = (points[:, 2] > 0.1) & (points[:, 2] < 1.0)
+            points = points[valid]
+            
+            pc.points = o3d.utility.Vector3dVector(points[:, :3])
+            pc.colors = o3d.utility.Vector3dVector(points[:, 3:] / 255.0)
+            self.stitched_pc += pc
+        
+        self.stitched_pc = self.stitched_pc.voxel_down_sample(voxel_size=0.001)
+        self.processing_done()
     
     def _publish_pc (self):
         if self.current_state != self.RECORDING:
@@ -214,8 +251,8 @@ class ScannerNode (Node, StateMachine):
         if self.curr_depth_msg is None or self.curr_color_msg is None:
             return
         
-        depth_msg = self.curr_depth_msg
-        color_msg = self.curr_color_msg
+        depth_msg = copy.deepcopy(self.curr_depth_msg)
+        color_msg = copy.deepcopy(self.curr_color_msg)
         
         ret, tf, h = self._get_transform("ur10e_base_link", "rgb_camera", depth_msg.header.stamp)
         
@@ -225,12 +262,14 @@ class ScannerNode (Node, StateMachine):
         else:
             self.get_logger().info("Transform lookup successful!")
         
-        points = self.generate_points(depth_msg, color_msg)
+        points = self.generate_points(depth_msg, color_msg, h)
+        self.pc_queue.append(points)
+        
         self.get_logger().info(f"Min value: {np.min(points)}, Max value: {np.max(points)}, Mean value: {np.mean(points)}")
         pc2_msg = PointCloud2()
         pc2_msg.header.stamp = depth_msg.header.stamp
         pc2_msg.header = depth_msg.header
-        pc2_msg.header.frame_id = "rgb_camera"
+        pc2_msg.header.frame_id = "ur10e_base_link"
         pc2_msg.height = 1
         pc2_msg.width = len(points)
         pc2_msg.is_dense = False
@@ -286,10 +325,13 @@ class ScannerNode (Node, StateMachine):
             self.get_logger().error(f"Transform lookup failed: {e}")
             return False, None, None
 
+
+
 def main (args=None):
     rclpy.init(args=args)
     node = ScannerNode()
-    rclpy.spin(node)
+    rclpy.spin(node)(node)
+
     rclpy.shutdown()
     
 if __name__ == "__main__":
