@@ -22,7 +22,6 @@ def undistort_image (img: cv2_t.MatLike, mtx, dist):
     dst = dst[y:y+h, x:x+w]
     return dst
 
-
 def find_chessboard_corners ( img: cv2_t.MatLike, pattern_size=(9, 6)):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     ret, corners = cv2.findChessboardCorners(gray, pattern_size, flags=cv2.CALIB_CB_FAST_CHECK)
@@ -39,7 +38,7 @@ def get_chessboard_pts (pattern_size=(9, 6), square_size=1.0) -> list[np.array]:
     return objp
 
 
-def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0):    
+def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, square_size=1.0, flags=cv2.CALIB_FIX_TANGENT_DIST):    
     objpoints = []
     imgpoints = []  
 
@@ -50,7 +49,7 @@ def compute_intrinsics ( imgs: list[cv2_t.MatLike], pattern_size, img_size, squa
             objpoints.append(obj_pts)
             imgpoints.append(img_pts)
     
-    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None)
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(objpoints, imgpoints, img_size, None, None, flags=flags)
     return mtx, dist, rvecs, tvecs, objpoints, imgpoints
 
 
