@@ -17,7 +17,6 @@ from rclpy.node import Node
 from statemachine import StateMachine, State
 from cv_bridge import CvBridge
 from hand_eye.utils import homogenous_from_rt
-from rclpy.executors import MultiThreadedExecutor
 
 bridge = CvBridge()
 
