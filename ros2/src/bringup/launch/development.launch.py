@@ -45,11 +45,19 @@ def generate_launch_description():
         parameters=[],
     )
     
+    moving_average = Node(
+        package='moving_average',
+        executable='moving_average_node',
+        name='moving_average_node',
+        output='both',
+        parameters=[],
+    )
 
     return LaunchDescription([
         ros_bridge,
         tcp_tf_node,
         intrinsics,
         scanner,
-        hand_eye
+        hand_eye,
+        moving_average
     ])
