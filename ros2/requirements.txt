@@ -7,3 +7,4 @@ transforms3d == 0.4.2
 python-statemachine == 2.3.4
 open3d == 0.18.0
 python-dotenv == 1.0.1
+black == 22.1.0

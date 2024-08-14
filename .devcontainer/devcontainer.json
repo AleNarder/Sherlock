@@ -24,7 +24,9 @@
                 "ms-vscode.cpptools-extension-pack",
                 "ms-azuretools.vscode-docker",
                 "Gruntfuggly.todo-tree",
-                "smilerobotics.urdf"
+                "smilerobotics.urdf",
+                "ms-python.black-formatter",
+                "redhat.vscode-yaml"
             ]
         }
     }

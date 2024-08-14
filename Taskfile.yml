@@ -1,7 +1,7 @@
-version: '3'
+version: "3"
 
 includes:
-  ros2: 
+  ros2:
     taskfile: ./ros2/Taskfile.yml
     dir: ./ros2
 
@@ -14,7 +14,6 @@ includes:
     dir: ./notebooks
 
 tasks:
-
   default:
     - task: install
     - task: build
