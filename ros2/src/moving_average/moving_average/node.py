@@ -35,9 +35,14 @@ class MovingAverageNode(Node):
         vec_speed_msg.z = np.inf
         speed_msg.data  = np.inf
         
+        tf = None
+        
         try: 
             tf = self.tf_buffer.lookup_transform(self.base_link, self.gripper_link, rclpy.time.Time())
-
+        except Exception as e:
+            self.get_logger().error('lookup failed: %s' % e)
+        
+        if tf is not None:
             # Update buffer
             translation = tf.transform.translation
             time        = tf.header.stamp.sec + tf.header.stamp.nanosec * 1e-9
@@ -65,11 +70,7 @@ class MovingAverageNode(Node):
             vec_speed_msg.z = avg_vec_speed[2]
             
             speed_msg.data = np.linalg.norm(avg_vec_speed)
-    
-        except Exception as e:
-            self.get_logger().error('error: %s' % e)
-            self.get_logger().error(traceback.format_exc())
-        
+            
         self.vec_speed_pb.publish(vec_speed_msg)
         self.speed_pb.publish(speed_msg)        
         
