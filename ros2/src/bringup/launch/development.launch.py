@@ -58,6 +58,8 @@ def generate_launch_description():
         parameters=[],
     )
 
+    # Ground truth
+
     return LaunchDescription(
         [ros_bridge, tcp_tf_node, intrinsics, scanner, hand_eye, moving_average]
     )
