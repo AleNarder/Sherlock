@@ -14,10 +14,6 @@ services:
       # This instructs X clients – your graphical programs – 
       # which X server to connect to. Set DISPLAY in the container to the value of $DISPLAY on your host.
       - DISPLAY=${DISPLAY}
-    ports:
-      - 8088:8088
-      - 9090:9090
-      - 5173:5173
     volumes:
       # Mounts the project folder to '/workspace'. The target path inside the container
       # should match what your application expects. In this case, the compose file is
@@ -43,5 +39,4 @@ services:
     profiles:
        - prod 
     privileged: true
-    ports:
-      - 8088:8088
+
