@@ -1,0 +1,201 @@
+<?xml version="1.0" ?>
+<robot name="er3600" xmlns:xacro="http://www.ros.org/wiki/xacro">
+<link name="er3600_base_link">
+  <inertial>
+    <origin xyz="-0.04588103472079715 -0.00096093718071204 0.09732935529090858" rpy="0 0 0"/>
+    <mass value="49.168703789271"/>
+    <inertia ixx="0.249181" iyy="0.31934" izz="0.276201" ixy="-0.002035" iyz="1.4e-05" ixz="-0.01146"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/base_link.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link1_1">
+  <inertial>
+    <origin xyz="-0.013928781393613353 -0.00035077205737144284 0.09857927042496772" rpy="0 0 0"/>
+    <mass value="19.336200620341412"/>
+    <inertia ixx="0.210765" iyy="0.127049" izz="0.154202" ixy="-0.000308" iyz="-3.8e-05" ixz="-0.010369"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.00074 0.000669 -0.195218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link1_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="0.00074 0.000669 -0.195218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link1_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link2_1">
+  <inertial>
+    <origin xyz="-0.021883207590868526 0.04822388948781154 0.13410308670762766" rpy="0 0 0"/>
+    <mass value="39.61118840801178"/>
+    <inertia ixx="0.507653" iyy="0.417458" izz="0.182812" ixy="-0.000233" iyz="-0.000114" ixz="0.010791"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.00074 0.048669 -0.368218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link2_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="0.00074 0.048669 -0.368218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link3_1">
+  <inertial>
+    <origin xyz="-0.013523278276526702 0.05775044302012478 0.014436901942284752" rpy="0 0 0"/>
+    <mass value="16.622402242515548"/>
+    <inertia ixx="0.039851" iyy="0.051163" izz="0.04812" ixy="-0.000364" iyz="0.00028" ixz="-0.004005"/>
+  </inertial>
+  <visual>
+    <origin xyz="0.00074 0.056669 -0.663218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link3_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="0.00074 0.056669 -0.663218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link3_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link4_1">
+  <inertial>
+    <origin xyz="0.11578239396708156 -0.0018433641701102498 0.0009432162781688458" rpy="0 0 0"/>
+    <mass value="7.832926502664415"/>
+    <inertia ixx="0.020785" iyy="0.047804" izz="0.058016" ixy="-0.00107" iyz="9.3e-05" ixz="0.000345"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.07626 0.000169 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link4_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="-0.07626 0.000169 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link4_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link5_1">
+  <inertial>
+    <origin xyz="0.023055761757816262 -0.02354084651228332 -5.31846369621336e-05" rpy="0 0 0"/>
+    <mass value="2.864964360899122"/>
+    <inertia ixx="0.001836" iyy="0.003374" izz="0.003172" ixy="-0.000197" iyz="0.0" ixz="2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.29476 -0.020831 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link5_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="-0.29476 -0.020831 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link5_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="link6_1">
+  <inertial>
+    <origin xyz="0.0022497869689456773 2.328065368062751e-07 -0.0003565192338087497" rpy="0 0 0"/>
+    <mass value="0.030641793338357776"/>
+    <inertia ixx="8e-06" iyy="4e-06" izz="4e-06" ixy="0.0" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.36876 0.000169 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/obj/link6_1.obj" scale="0.01 0.01 0.01"/>
+    </geometry>
+  </visual>
+  <collision>
+    <origin xyz="-0.36876 0.000169 -0.700218" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="file://$(find er3600_description)/meshes/stl/link6_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="joint1" type="revolute">
+  <origin xyz="-0.00074 -0.000669 0.195218" rpy="0 0 0"/>
+  <parent link="er3600_base_link"/>
+  <child link="link1_1"/>
+  <axis xyz="-0.0 -0.0 1.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+<joint name="joint2" type="revolute">
+  <origin xyz="0.0 -0.048 0.173" rpy="0 0 0"/>
+  <parent link="link1_1"/>
+  <child link="link2_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+<joint name="joint3" type="revolute">
+  <origin xyz="0.0 -0.008 0.295" rpy="0 0 0"/>
+  <parent link="link2_1"/>
+  <child link="link3_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+<joint name="joint4" type="revolute">
+  <origin xyz="0.077 0.0565 0.037" rpy="0 0 0"/>
+  <parent link="link3_1"/>
+  <child link="link4_1"/>
+  <axis xyz="1.0 -0.0 -0.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+<joint name="joint5" type="revolute">
+  <origin xyz="0.2185 0.021 0.0" rpy="0 0 0"/>
+  <parent link="link4_1"/>
+  <child link="link5_1"/>
+  <axis xyz="0.0 -1.0 -0.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+<joint name="joint6" type="revolute">
+  <origin xyz="0.074 -0.021 0.0" rpy="0 0 0"/>
+  <parent link="link5_1"/>
+  <child link="link6_1"/>
+  <axis xyz="1.0 -0.0 -0.0"/>
+  <limit upper="6.283185307179586" lower="-6.283185307179586" effort="100" velocity="100"/>
+</joint>
+
+
+<link name="kaigos_tcp">
+</link>
+
+<joint name="kaigos_tcp_joint" type="fixed">
+  <origin xyz="0.0045 0.0 0.0" rpy="0.0 1.5707963267948966 0.0"/>
+  <parent link="link6_1"/>
+  <child link="kaigos_tcp"/>
+</joint>
+
+</robot>
