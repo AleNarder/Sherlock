@@ -7,12 +7,9 @@ import json
 import os
 import cv2
 import math
-import time
 import shutil
 
-
 from statemachine import StateMachine, State
-from rclpy.executors import MultiThreadedExecutor
 from realsense2_camera_msgs.msg import Extrinsics
 from intrinsics.utils import (
     is_sharp,
@@ -25,22 +22,19 @@ from hand_eye.utils import (
     homogenous_from_rt,
     CALIB_HAND_EYE_METHODS,
 )
-from cv_bridge import CvBridge
-from threading import Thread, Lock
 
+from cv_bridge import CvBridge
+from threading import Thread
 from rclpy.node import Node
-from rclpy.qos import QoSProfile, HistoryPolicy
 from std_srvs.srv import Trigger
 from sensor_msgs.msg import Image
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from geometry_msgs.msg import TransformStamped
-from sklearn.covariance import EllipticEnvelope
 
 from tf2_ros import TransformBroadcaster
 from tf2_ros.static_transform_broadcaster import StaticTransformBroadcaster
 
 bridge = CvBridge()
-
 
 class HandEyeNode(StateMachine, Node):
 
@@ -79,17 +73,20 @@ class HandEyeNode(StateMachine, Node):
         hand_frame_id: str,
         eye_frame_id: str,
         target_frame_id: str,
+        max_speed: float = 0.001,
         data_folder: str = "/calibration/data",
     ):
         Node.__init__(self, "hand_eye_node")
 
         # Variables
-        self.hand_frame_id = hand_frame_id
-        self.base_frame_id = base_frame_id
-        self.eye_frame_id = eye_frame_id
+        self.hand_frame_id   = hand_frame_id
+        self.base_frame_id   = base_frame_id
+        self.eye_frame_id    = eye_frame_id
         self.target_frame_id = target_frame_id
-        self.data_folder = data_folder
-
+        self.data_folder     = data_folder
+        self.max_speed       = max_speed
+        
+        self.current_speed   = None
         self.frames = []
         self.drifts = []
         self.hand2base_hs = []
@@ -120,38 +117,46 @@ class HandEyeNode(StateMachine, Node):
             self.get_logger().info("hand2base_hs loaded!")
 
         self.eye2hand_h = None
-        if os.path.exists(os.path.join(self.data_folder, "hand_eye", "eye2hand_h.npy")):
+        if os.path.exists(os.path.join(self.data_folder, "hand_eye", "processing", "eye2hand_h.npy")):
             self.eye2hand_h = np.load(
-                os.path.join(self.data_folder, "hand_eye", "eye2hand_h.npy")
+                os.path.join(self.data_folder, "hand_eye", "processing", "eye2hand_h.npy")
             )
             self.get_logger().info("hand2eye_h loaded!")
 
         StateMachine.__init__(self)
 
         # Subs
-        self.processing_lock = Lock()
-        self.create_subscription(
+        self.speed_sub = self.create_subscription(
+            Float32,
+            "/odom/speed",
+            self._on_speed_cb, 
+            10
+        )
+        
+        self.color_sub = self.create_subscription(
             Image,
-            "/camera/color/image_raw",
+            "/camera/camera/color/image_raw",
             self._on_image_cb,
-            QoSProfile(
-                history=HistoryPolicy.KEEP_LAST,
-                depth=1,
-                # Optionally, you can set reliability and durability according to your requirements.
-            ),
+            10
         )
 
         # Services
-        self.create_service(Trigger, "/hand_eye/initialize", self._initialize_cb),
+        self.create_service(
+            Trigger, "/hand_eye/initialize", self._initialize_cb
+        )
+        
         self.create_service(
             Trigger, "/hand_eye/start_recording", self._start_recording_cb
-        ),
+        )
+        
         self.create_service(
             Trigger, "/hand_eye/stop_recording", self._stop_recording_cb
         )
+        
         self.create_service(
             Trigger, "/hand_eye/start_reprojecting", self._start_reprojecting_cb
         )
+        
         self.create_service(
             Trigger, "/hand_eye/stop_reprojecting", self._stop_reprojecting_cb
         )
@@ -162,13 +167,13 @@ class HandEyeNode(StateMachine, Node):
         self.create_timer(0.1, self._publish_cb)
 
         # TF
-        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_buffer   = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(
             self.tf_buffer, self, spin_thread=True
         )
 
         self.dynamic_broadcaster = TransformBroadcaster(self)
-        self.static_broadcaster = StaticTransformBroadcaster(self)
+        self.static_broadcaster  = StaticTransformBroadcaster(self)
 
         self.initialize()
 
@@ -365,15 +370,18 @@ class HandEyeNode(StateMachine, Node):
             response.success = False
         return response
 
+    def _on_speed_cb(self, msg: Float32):
+        self.current_speed = msg.data
+
     def _on_image_cb(self, msg: Image):
-        try:
-            if self.current_state == self.RECORDING:
-                self.process_recording(msg)
-            elif self.current_state == self.REPROJECTING:
-                self.process_reprojecting(msg)
-        except Exception as e:
-            self.get_logger().error(f"Error processing image: {e}")
-            traceback.print_exc()
+            try:
+                if self.current_state == self.RECORDING:
+                    self.process_recording(msg)
+                elif self.current_state == self.REPROJECTING:
+                    self.process_reprojecting(msg)
+            except Exception as e:
+                self.get_logger().error(f"Error processing image: {e}")
+                traceback.print_exc()
 
     def _publish_cb(self):
 
@@ -395,6 +403,10 @@ class HandEyeNode(StateMachine, Node):
         timestamp = msg.header.stamp
         cv_frame = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
+        if not self.current_speed < self.max_speed:
+            self.get_logger().info("Speed too high")
+            return
+        
         if not is_sharp(cv_frame, 290):
             self.get_logger().info("Image is not sharp enough")
             return
@@ -547,10 +559,10 @@ class HandEyeNode(StateMachine, Node):
         best_eye2hand_h = None
         best_pts = None
         best_center = None
-
         curr_it = 1
-        ok = True
-        while len(hand2base_hs) > min_samples or curr_it > max_iterations:
+
+        
+        while len(hand2base_hs) > min_samples and curr_it < max_iterations:
 
             self.get_logger().info(
                 f"Computing hand-eye calibration with {len(hand2base_hs)} samples"
@@ -678,21 +690,23 @@ class HandEyeNode(StateMachine, Node):
                     for h, pt in zip(hand2base_hs, best_pts)
                     if (np.linalg.norm(pt - best_center) ** 2) <= best_mse
                 ]
+                
                 target2eye_hs = [
                     h
                     for h, pt in zip(target2eye_hs, best_pts)
                     if (np.linalg.norm(pt - best_center) ** 2) <= best_mse
                 ]
+                
                 curr_it += 1
 
             except Exception as e:
                 self.get_logger().error(
                     f"Error computing hand-eye calibration at iteration {curr_it}: {e}"
                 )
-                ok = False
+                break
 
         self.eye2hand_hs = eye2hand_hs
-        self.eye2hand_h = best_eye2hand_h
+        self.eye2hand_h  = best_eye2hand_h
 
         self.processing_done()
 
@@ -737,19 +751,13 @@ class HandEyeNode(StateMachine, Node):
 def main():
     rclpy.init()
     node = HandEyeNode(
-        base_frame_id="ur10e_base_link",
+        base_frame_id="er3600_base_link",
         hand_frame_id="tcp",
         eye_frame_id="rgb_camera",
         target_frame_id="chessboard",
     )
 
-    # Create a MultiThreadedExecutor with the number of threads you want
-    executor = MultiThreadedExecutor(num_threads=4)
-
-    # Add the node to the executor
-    executor.add_node(node)
-    # Spin the executor (this will block until shutdown)
-    executor.spin()
+    rclpy.spin(node)
 
     rclpy.shutdown()
 
