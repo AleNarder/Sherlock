@@ -1,12 +1,16 @@
+import math
 import os
+
 from launch.actions import IncludeLaunchDescription
 from launch_ros.actions import Node
 from launch import LaunchDescription
 from ament_index_python.packages import get_package_share_directory
 
 # frontend for xml type launch file!
-from launch.launch_description_sources import FrontendLaunchDescriptionSource
-import math
+from launch.launch_description_sources import (
+    FrontendLaunchDescriptionSource,
+    PythonLaunchDescriptionSource,
+)
 
 
 def generate_launch_description():
@@ -58,8 +62,30 @@ def generate_launch_description():
         parameters=[],
     )
 
-    # Ground truth
+    rviz2 = Node(
+        package="rviz2",
+        executable="rviz2",
+        name="rviz2",
+        output="screen",
+        arguments=["-d", "/calibration/ros2/src/bringup/config/config.rviz"],
+    )
+
+    another_launch_file = os.path.join(
+        get_package_share_directory("er3600_description"), "launch", "display.launch.py"
+    )
+    er3600 = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(another_launch_file)
+    )
 
     return LaunchDescription(
-        [ros_bridge, tcp_tf_node, intrinsics, scanner, hand_eye, moving_average]
+        [
+            # ros_bridge,
+            er3600,
+            tcp_tf_node,
+            intrinsics,
+            scanner,
+            hand_eye,
+            rviz2,
+            moving_average,
+        ]
     )
