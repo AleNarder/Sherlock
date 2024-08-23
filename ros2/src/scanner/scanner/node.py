@@ -10,7 +10,7 @@ import open3d as o3d
 import copy
 
 from sensor_msgs.msg import Image, PointCloud2, PointField, CameraInfo
-from std_msgs.msg import String
+from std_msgs.msg import String, Float32
 from std_srvs.srv import Trigger
 from realsense2_camera_msgs.msg import Extrinsics
 from rclpy.node import Node
@@ -35,6 +35,7 @@ class ScannerNode(Node, StateMachine):
             "intrinsics_are_loaded",
             "hand_eye_tf_are_loaded",
             "depth_camera_info_are_loaded",
+            "depth_2_color_is_loaded",
         ],
     ) | UNITIALIZED.to(UNITIALIZED)
 
@@ -51,23 +52,25 @@ class ScannerNode(Node, StateMachine):
             String, "/intrinsics/coeffs", self._on_intrinsics_coeffs_cb, 10
         )
         self.create_subscription(
-            Image, "/camera/color/image_raw", self._on_color_image_cb, 10
+            Image, "/camera/camera/color/image_raw", self._on_color_image_cb, 10
         )
         self.create_subscription(
-            Image, "/camera/depth/image_rect_raw", self._on_depth_image_cb, 10
+            Image, "/camera/camera/depth/image_rect_raw", self._on_depth_image_cb, 10
         )
         self.create_subscription(
-            CameraInfo, "/camera/depth/camera_info", self._on_depth_info_cb, 10
+            CameraInfo, "/camera/camera/depth/camera_info", self._on_depth_info_cb, 10
         )
         self.create_subscription(
             Extrinsics,
-            "/camera/extrinsics/depth_to_color",
+            "/camera/camera/extrinsics/depth_to_color",
             self._on_depth_to_color_cb,
             10,
         )
         self.create_subscription(
             Extrinsics, "/hand_eye/extrinsics", self._on_hand_eye_cb, 10
         )
+
+        self.create_subscription(Float32, "odom/speed", self._on_speed_cb, 10)
 
         # Services
         self.create_service(
@@ -91,6 +94,7 @@ class ScannerNode(Node, StateMachine):
         self.color_frames = []
         self.depth_frames = []
 
+        self.curr_speed: None | float = 0.0
         self.curr_depth_msg: None | Image = None
         self.curr_color_msg: None | Image = None
 
@@ -100,7 +104,10 @@ class ScannerNode(Node, StateMachine):
         self.hand_eye_h = None
         self.color_k = None
 
-        self.pc_queue = []
+        self.points_queue = []
+        self.pc_queue_pts = []
+        self.pc_queue_colors = []
+
         self.stitched_pc = None
 
     #################################
@@ -108,15 +115,19 @@ class ScannerNode(Node, StateMachine):
     #################################
 
     def intrinsics_are_loaded(self):
+
         return self.color_k is not None
 
     def hand_eye_tf_are_loaded(self):
+
         return self.hand_eye_h is not None
 
     def depth_camera_info_are_loaded(self):
+
         return self.depth_k is not None
 
     def depth_2_color_is_loaded(self):
+
         return self.depth_2_color_h is not None
 
     #################################
@@ -126,20 +137,24 @@ class ScannerNode(Node, StateMachine):
     def before_start_recording(self):
         self.color_frames = []
         self.depth_frames = []
-        self.pc_queue = []
+        self.points_queue = []
         self.stitched_pc = o3d.geometry.PointCloud()
 
-        # threading.Thread(target=self.consume_pc_queue).start()
-
     def before_stop_recording(self):
+
+        self.get_logger().info(f"Saving color frames to disk")
         np.save(
             os.path.join("/", "calibration", "data", "scanner", "color_frames.npy"),
             self.color_frames,
         )
+
+        self.get_logger().info(f"Saving color frames to disk")
         np.save(
             os.path.join("/", "calibration", "data", "scanner", "depth_frames.npy"),
             self.depth_frames,
         )
+
+        self.get_logger().info(f"Saving depth to color transform to disk")
         np.save(
             os.path.join("/", "calibration", "data", "scanner", "depth_2_color_h.npy"),
             self.depth_2_color_h,
@@ -157,6 +172,19 @@ class ScannerNode(Node, StateMachine):
             os.path.join("/", "calibration", "data", "scanner", "stitched_pc.ply"),
             self.stitched_pc,
         )
+        self.get_logger().info(f"Saving pc points queue to disk")
+        np.save(
+            os.path.join("/", "calibration", "data", "scanner", "pc_points.npy"),
+            np.array(self.pc_queue_pts, dtype=object),
+            allow_pickle=True,
+        )
+
+        self.get_logger().info(f"Saving pc colors queue to disk")
+        np.save(
+            os.path.join("/", "calibration", "data", "scanner", "pc_colors.npy"),
+            np.array(self.pc_queue_colors, dtype=object),
+            allow_pickle=True,
+        )
         self.get_logger().info(f"Point cloud saved!")
 
     def on_enter_state(self, event, state):
@@ -173,12 +201,19 @@ class ScannerNode(Node, StateMachine):
         self.start_recording()
         return response
 
+    def _on_speed_cb(self, msg: Float32):
+        self.curr_speed = msg.data
+
     def _on_color_image_cb(self, msg: Image):
         if self.current_state == self.RECORDING:
             color_frame = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
             self.curr_color_msg = msg
 
-            if self.curr_depth_msg is not None and self.curr_color_msg is not None:
+            if (
+                self.curr_depth_msg is not None
+                and self.curr_color_msg is not None
+                and self.curr_speed == 0.0
+            ):
                 depth_frame = bridge.imgmsg_to_cv2(self.curr_depth_msg)
                 self.depth_frames.append(depth_frame)
                 self.color_frames.append(color_frame)
@@ -188,6 +223,7 @@ class ScannerNode(Node, StateMachine):
             self.curr_depth_msg = msg
 
     def _on_depth_to_color_cb(self, msg: Extrinsics):
+        self.get_logger().info(f"Depth to color: {msg}")
         if self.current_state == self.UNITIALIZED:
             self.depth_2_color_h = homogenous_from_rt(
                 np.array(msg.rotation).reshape(3, 3), msg.translation
@@ -252,7 +288,7 @@ class ScannerNode(Node, StateMachine):
         y = (v - cy) * depth_image / fy
         z = depth_image
 
-        # Combine x, y, z into an (N, 3) array, filtering out points with zero depth, negative depth, or depth greater than 1m
+        # Combine x, y, z into an (N, 3) array, filtering out points with zero depth or negative depth
         valid = (z > 0.1) & (z < 1.0)
         points = np.stack(
             (
@@ -294,17 +330,24 @@ class ScannerNode(Node, StateMachine):
         return points
 
     def _process_pc_queue(self):
-        for points in self.pc_queue:
+        for points in self.points_queue:
             pc = o3d.geometry.PointCloud()
-            # Only consider points within a certain range
-            valid = (points[:, 2] > 0.1) & (points[:, 2] < 1.0)
-            points = points[valid]
 
-            pc.points = o3d.utility.Vector3dVector(points[:, :3])
-            pc.colors = o3d.utility.Vector3dVector(points[:, 3:] / 255.0)
+            valid = (points[:, 2] > 0.1) & (points[:, 2] < 1.0)
+
+            points = points[valid]
+            pc_points = points[:, :3]
+            pc_colors = points[:, 3:] / 255.0
+
+            pc.points = o3d.utility.Vector3dVector(pc_points)
+            pc.colors = o3d.utility.Vector3dVector(pc_colors)
+
+            self.pc_queue_pts.append(pc_points)
+            self.pc_queue_colors.append(pc_colors)
+
             self.stitched_pc += pc
 
-        self.stitched_pc = self.stitched_pc.voxel_down_sample(voxel_size=0.001)
+        self.stitched_pc = self.stitched_pc.voxel_down_sample(voxel_size=1e-4)
         self.processing_done()
 
     def _publish_pc(self):
@@ -318,7 +361,7 @@ class ScannerNode(Node, StateMachine):
         color_msg = copy.deepcopy(self.curr_color_msg)
 
         ret, tf, h = self._get_transform(
-            "ur10e_base_link", "rgb_camera", depth_msg.header.stamp
+            "er3600_base_link", "rgb_camera", depth_msg.header.stamp
         )
 
         if not ret:
@@ -328,7 +371,7 @@ class ScannerNode(Node, StateMachine):
             self.get_logger().info("Transform lookup successful!")
 
         points = self.generate_points(depth_msg, color_msg, h)
-        self.pc_queue.append(points)
+        self.points_queue.append(points)
 
         self.get_logger().info(
             f"Min value: {np.min(points)}, Max value: {np.max(points)}, Mean value: {np.mean(points)}"
@@ -336,7 +379,7 @@ class ScannerNode(Node, StateMachine):
         pc2_msg = PointCloud2()
         pc2_msg.header.stamp = depth_msg.header.stamp
         pc2_msg.header = depth_msg.header
-        pc2_msg.header.frame_id = "ur10e_base_link"
+        pc2_msg.header.frame_id = "er3600_base_link"
         pc2_msg.height = 1
         pc2_msg.width = len(points)
         pc2_msg.is_dense = False
