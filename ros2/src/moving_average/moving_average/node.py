@@ -1,7 +1,6 @@
 import tf2_ros
 import rclpy
 import numpy as np
-import traceback
 
 from rclpy.node import Node
 from moving_average.circular_buffer import CircularBuffer
@@ -13,7 +12,7 @@ class MovingAverageNode(Node):
     def __init__(self, base_link: str, gripper_link: str):
         super().__init__("moving_average")
 
-        self.positions_buffer = CircularBuffer(5, 4, fill_value=np.inf)
+        self.positions_buffer = CircularBuffer(5, 4, fill_value=0.0)
         self.base_link = base_link
         self.gripper_link = gripper_link
 
@@ -63,8 +62,10 @@ class MovingAverageNode(Node):
             displacements = np.diff(positions, axis=0)
             time_diffs = np.diff(timestamps).flatten()
 
-            self.get_logger().info(f"displacements: {displacements}")
-            self.get_logger().info(f"time_diffs: {time_diffs}")
+            if np.any(time_diffs[:, np.newaxis] == 0):
+                self.get_logger().error("Time diff is zero, skipping computation")
+                return
+
             speeds = displacements / time_diffs[:, np.newaxis]
 
             # Compute average speed
@@ -83,7 +84,7 @@ class MovingAverageNode(Node):
 def main(args=None):
     rclpy.init(args=args)
 
-    node = MovingAverageNode(base_link="ur10e_base_link", gripper_link="link6_1")
+    node = MovingAverageNode(base_link="er3600_base_link", gripper_link="tcp")
 
     rclpy.spin(node)
     rclpy.shutdown()
