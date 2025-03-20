@@ -8,7 +8,7 @@ Sherlock is a ROS2 and Python based pipeline which can be used to perform object
 
 A high level description of the pipeline is given in the image below. More details can be found in the `docs/thesis` folder, where a comprehensive description of the inner working of each node is given
 
-![Screenshot from 2025-03-20 22-26-45](/home/alessio/Pictures/Screenshots/Screenshot from 2025-03-20 22-26-45.png)
+<img src="./overview.png" />
 
 As described in the image, there are six nodes:
 
